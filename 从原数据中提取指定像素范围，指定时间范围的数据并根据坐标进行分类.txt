@@ -1,0 +1,71 @@
+clear;
+
+% 指定文件路径
+% file_path = 'D:\课题组\事件相机相关\实验\图片\2024.03.21\MipiData_20240321_101306062_EI_70M.csv';
+file_path = 'D:\matlabproject\projects\blood\1.2mm_clip.csv';
+
+% 使用 readmatrix 读取数据
+data = readmatrix(file_path);
+
+% 设置要提取的行和列范围
+min_row = 415;  max_row = 515;  % 行范围
+min_col = 425;  max_col = 525;  % 列范围
+
+% 设置时间范围（秒单位）
+start_time_sec = 0;   % 起始时间(秒)
+end_time_sec = 0.5;     % 结束时间(秒)
+
+% 列索引配置（根据实际数据调整）
+row_col = 1;    % 行地址列
+col_col = 2;    % 列地址列
+value_col = 3;  % 像素值列
+time_col = 5;   % 时间戳列
+
+% 转换为微秒（假设时间戳单位是微秒）
+start_time_us = start_time_sec * 1e6;
+end_time_us = end_time_sec * 1e6;
+
+% 提取指定范围内数据（根据配置的列索引）
+selected_data = data(data(:, row_col) >= min_row & data(:, row_col) <= max_row & ...
+                    data(:, col_col) >= min_col & data(:, col_col) <= max_col & ...
+                    data(:, time_col) >= start_time_us & data(:, time_col) <= end_time_us, :);
+
+% 获取所有唯一的（行, 列）组合
+unique_coords = unique(selected_data(:, [row_col, col_col]), 'rows');
+
+% 初始化结构体存储分类数据
+classified_data = struct();
+
+% 遍历每个坐标，分类存储数据
+for i = 1:size(unique_coords, 1)
+    row = unique_coords(i, 1);
+    col = unique_coords(i, 2);
+    
+    % 提取当前坐标下的所有数据
+    mask = (selected_data(:, row_col) == row) & (selected_data(:, col_col) == col);
+    coord_data = selected_data(mask, :);
+    
+    % 存储到结构体，字段名格式如 "R120C200"
+    field_name = sprintf('R%dC%d', row, col);
+    classified_data.(field_name) = coord_data;
+    
+    % 显示时间范围信息（转换为秒显示）
+    if ~isempty(coord_data)
+        min_t = min(coord_data(:, time_col)) / 1e6;
+        max_t = max(coord_data(:, time_col)) / 1e6;
+        fprintf('%s: %.3fs ~ %.3fs (%d events)\n', ...
+                field_name, min_t, max_t, size(coord_data,1));
+    else
+        fprintf('%s: 无数据\n', field_name);
+    end
+end
+
+% 保存分类后的数据
+save('classified_data.mat', 'classified_data');
+fprintf('\n结果已保存到 classified_data.mat\n');
+fprintf('时间筛选范围: %.3fs ~ %.3fs (对应%d~%dμs)\n', ...
+        start_time_sec, end_time_sec, start_time_us, end_time_us);
+
+% 播放完成提示音
+load train;
+sound(y, Fs);

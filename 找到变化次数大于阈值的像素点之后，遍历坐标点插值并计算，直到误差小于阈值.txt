@@ -1,0 +1,126 @@
+clear;
+
+% 预设速度值
+target_velocity = 0.259326; % 单位：mm/s
+error_threshold = 0.08; % 误差阈值
+
+% 第一段代码：数据加载与预处理
+% 指定文件路径
+matfile_path = 'First round of data filtering.mat';
+
+% 使用load函数加载.mat文件
+loadedData = load(matfile_path);
+
+% 获取加载的数据
+data = loadedData.data_with_x_or_more_repeats;  
+
+% 获取所有唯一的坐标点
+unique_coords = unique(data(:, 1:2), 'rows');
+
+% 遍历每个坐标点
+found = false; % 标记是否找到符合条件的坐标点
+for idx = 1:size(unique_coords, 1)
+    target_row = unique_coords(idx, 1);
+    target_col = unique_coords(idx, 2);
+    
+    % 通过逻辑索引筛选出目标坐标的数据
+    target_data = data(data(:, 1) == target_row & data(:, 2) == target_col, :);
+    
+    % 按时间排序数据
+    sorted_data = sortrows(target_data, 5); % 假设时间列是第五列
+    
+    % 第二段代码：数据插值
+    % 动态设置插值时间间隔阈值
+    delta_t = 100;
+    
+    % 在相邻序号列中插值
+    interpolatedData = [];
+    for i = 1:size(sorted_data, 1)-1
+        interpolatedData = [interpolatedData; sorted_data(i, :)];  % 添加原始数据点
+        
+        time_diff = sorted_data(i+1, 5) - sorted_data(i, 5);
+        
+        % 如果时间间隔大于设定的阈值，则插值
+        if time_diff > delta_t
+            num_inserted_rows = floor(time_diff / delta_t);
+            interpolated_gray_value = sorted_data(i, 3);
+            
+            % 插入新行
+            for j = 1:num_inserted_rows
+                interpolatedData = [interpolatedData; [sorted_data(i, 1:2), interpolated_gray_value, sorted_data(i, 4), sorted_data(i, 5) + j * delta_t]];
+            end
+        end
+    end
+    
+    % 添加最后一行数据
+    interpolatedData = [interpolatedData; sorted_data(end, :)];
+    
+    % 第三段代码：自相关分析与速度计算
+    % 得到自相关图像
+    x = interpolatedData(:, 3);
+    [a, b] = xcorr(x, 'unbiased');
+    
+    % 找到 x 轴中点的索引
+    midpoint_index = round(length(b) / 2);
+    
+    % 找到 x 轴中点的对应的 y 值
+    midpoint_y_value = a(midpoint_index);
+    
+    % 找到以中点的 Y 值为起点的右侧的第一个极小值点
+    right_min_index = midpoint_index + 1; % 从中点的右侧开始搜索
+    while right_min_index < length(a) && a(right_min_index) >= a(right_min_index + 1)
+        right_min_index = right_min_index + 1;
+    end
+    
+    % 返回该极小值点的X轴的值
+    right_min_x_value = b(right_min_index);
+    
+    % 找到第一个极小值点的 Y 值
+    right_min_y_value = a(right_min_index);
+    
+    % 找到这两个 Y 值的中间值
+    middle_y_value = (midpoint_y_value + right_min_y_value) / 2;
+    
+    % 找到两个点对应的索引
+    start_index = min(midpoint_index, right_min_index);
+    end_index = max(midpoint_index, right_min_index);
+    
+    % 在这两个索引之间找到最接近中间值的索引
+    [~, middle_index] = min(abs(a(start_index:end_index) - middle_y_value));
+    
+    % 调整索引为全局索引
+    middle_index = middle_index + start_index - 1;
+    
+    % 返回该点的 x 值
+    right_middle_x_value = b(middle_index);
+    
+    % 设定参数
+    n = 3.05; % 散斑尺寸（单位：像素）
+    k = 5.1667; % 像素实际尺寸（单位：μm/pixel）
+    delta_t = 100; % 事件相机输出间隔（单位：μs）
+    
+    % 计算半高宽
+    half_height_width = 2 * right_middle_x_value * delta_t * 10^-6; % 计算半高宽（单位：s）
+    
+    % 用半高宽计算速度
+    t2 = half_height_width; % 一个散斑通过某固定像素所需的时间（单位：s）
+    v2 = n * k * 10^-3 / t2; % 速度（单位：mm/s）
+    
+    % 检查速度是否在误差范围内
+    if abs(v2 - target_velocity) / target_velocity < error_threshold
+        found = true; % 标记找到符合条件的坐标点
+        disp('找到符合条件的坐标点：');
+        disp(['坐标点：(', num2str(target_row), ', ', num2str(target_col), ')']);
+        disp(['计算速度：', num2str(v2), ' mm/s']);
+        disp(['半高宽：', num2str(half_height_width), ' s']);
+        break; % 停止遍历
+    end
+end
+
+if ~found
+    disp('未找到符合条件的坐标点。');
+end
+
+% 播放音频信号
+load train 
+sound(y,Fs);

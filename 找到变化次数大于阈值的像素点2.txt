@@ -1,0 +1,47 @@
+clear;
+
+% 指定文件路径
+file_path = 'D:\课题组\事件相机相关\实验\图片\2024.03.21\MipiData_20240321_104750252_EI_70M.csv';
+
+% 使用 readmatrix 读取数据
+data = readmatrix(file_path);
+
+% 提取行地址和纵地址
+positions = data(:, 1:2);
+
+% 计算位置的唯一组合及其出现次数
+[unique_positions, ~, idx] = unique(positions, 'rows');
+counts = hist(idx, unique(idx));
+
+% 找出最大的变化次数
+max_count = max(counts);
+disp(['最大的变化次数：', num2str(max_count)]);
+
+% 设置变化次数阈值
+x = max_count - 50;
+
+% 找出变化次数大于等于 x 的位置
+positions_with_x_or_more_repeats = unique_positions(counts >= x, :);
+counts_with_x_or_more_repeats = counts(counts >= x);
+
+% 将结果保存到文本文件
+save_positions_counts_file_path = '变化次数大于等于阈值的位置及其变化次数.txt';
+fileID = fopen(save_positions_counts_file_path, 'w');
+fprintf(fileID, 'Position_X, Position_Y, Counts\n'); % 写入标题行
+for i = 1:size(positions_with_x_or_more_repeats, 1)
+    fprintf(fileID, '%d, %d, %d\n', positions_with_x_or_more_repeats(i, 1), positions_with_x_or_more_repeats(i, 2), counts_with_x_or_more_repeats(i));
+end
+fclose(fileID);
+disp(['变化次数大于等于 ', num2str(x), ' 的位置及其变化次数已保存到文件 ', save_positions_counts_file_path]);
+
+% 根据阈值筛选数据
+data_with_x_or_more_repeats = data(ismember(positions, positions_with_x_or_more_repeats, 'rows'), :);
+
+% 保存筛选后的数据到 .mat 文件
+save_file_path = 'First round of data filtering.mat';
+save(save_file_path, 'data_with_x_or_more_repeats', '-v7.3');
+disp(['数据已保存到文件 ', save_file_path]);
+
+% 播放音频信号
+load train 
+sound(y,Fs);

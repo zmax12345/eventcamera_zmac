@@ -1,0 +1,56 @@
+clear;
+
+% 指定.mat文件路径
+matFilePath = 'Second round of data filtering.mat';
+
+% 使用load函数加载.mat文件
+loadedData = load(matFilePath);
+
+% 获取加载的数据
+Data = loadedData.sorted_data;  % 用你实际的变量名替代 "yourVariableName"
+
+% 动态设置插值时间间隔阈值
+% delta_t = input('请输入插值时间间隔阈值 (μs)：');
+delta_t = 50;
+
+% 开始计时
+tic;
+
+% 在相邻序号列中插值
+interpolatedData = [];
+for i = 1:size(Data, 1)-1
+    interpolatedData = [interpolatedData; Data(i, :)];  % 添加原始数据点
+    
+    time_diff = Data(i+1, 5) - Data(i, 5);
+    
+    % 如果时间间隔大于设定的阈值，则插值
+    if time_diff > delta_t
+        num_inserted_rows = floor(time_diff / delta_t);
+        interpolated_gray_value = Data(i, 3);
+        
+        % 插入新行
+        for j = 1:num_inserted_rows
+            interpolatedData = [interpolatedData; [Data(i, 1:2), interpolated_gray_value, Data(i, 4), Data(i, 5) + j * delta_t]];
+        end
+    end
+end
+
+% 添加最后一行数据
+interpolatedData = [interpolatedData; Data(end, :)];
+
+% 结束计时并显示插值时间
+elapsed_time = toc;
+fprintf('插值过程耗时：%.4f 秒\n', elapsed_time);
+
+% 指定要保存的文件名
+save_file_path = 'interpolatedData of Second round of data filtering.mat';
+
+% 保存数据到 .mat 文件
+save(save_file_path, 'interpolatedData', '-v7.3');
+
+disp(['数据已保存到文件 ', save_file_path]);
+
+% 播放音频信号
+load train 
+sound(y,Fs);
+

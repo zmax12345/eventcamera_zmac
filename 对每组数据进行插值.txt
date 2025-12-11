@@ -1,0 +1,89 @@
+clear;
+
+% 指定.mat文件路径
+matFilePath = 'classified_data.mat';
+
+% 加载.mat文件
+loadedData = load(matFilePath); 
+
+% 获取结构体数据
+classifiedStruct = loadedData.classified_data;
+
+% 获取所有字段名（像素坐标）
+fieldNames = fieldnames(classifiedStruct);
+
+% 设置插值时间间隔（微秒）
+delta_t = 15;
+
+% 创建新结构体存储插值后数据
+interpolatedStruct = struct();
+
+% 初始化时间统计变量
+totalInterpolationTime = 0;
+pixelInterpolationTimes = zeros(length(fieldNames), 1);
+
+% 遍历每个像素坐标
+for k = 1:length(fieldNames)
+    currentField = fieldNames{k};
+    Data = classifiedStruct.(currentField);  % 获取当前坐标数据
+    
+    tic; % 开始计时当前像素
+    
+    interpolatedData = [];  % 初始化空数组
+    
+    % 处理每一行数据
+    for i = 1:size(Data,1)
+        % 添加原始数据点
+        interpolatedData = [interpolatedData; Data(i,:)];
+        
+        % 如果不是最后一行，检查是否需要插值
+        if i < size(Data,1)
+            time_diff = Data(i+1,5) - Data(i,5);
+            
+            if time_diff > delta_t
+                % 计算需要插入的行数
+                num_inserts = floor(time_diff/delta_t) - 1;
+                
+                % 插入新数据点
+                for j = 1:num_inserts
+                    newTime = Data(i,5) + j*delta_t;
+                    newRow = [Data(i,1:4), newTime];
+                    interpolatedData = [interpolatedData; newRow];
+                end
+            end
+        end
+    end
+    
+    % 存储到新结构体
+    interpolatedStruct.(currentField) = interpolatedData;
+    
+    % 记录并累加时间
+    elapsedTime = toc;
+    pixelInterpolationTimes(k) = elapsedTime;
+    totalInterpolationTime = totalInterpolationTime + elapsedTime;
+    
+    % % 显示进度
+    % fprintf('%s: 原始%d行 → 插值后%d行 (耗时%.3f秒)\n', ...
+    %         currentField, size(Data,1), size(interpolatedData,1), elapsedTime);
+end
+
+% 显示总体统计信息
+fprintf('\n===== 插值时间统计 =====\n');
+fprintf('总像素数: %d\n', length(fieldNames));
+fprintf('插值间隔：%d μs\n', delta_t);
+fprintf('总插值时间: %.3f秒\n', totalInterpolationTime);
+fprintf('平均每个像素耗时: %.3f秒\n', mean(pixelInterpolationTimes));
+fprintf('最慢像素耗时: %.3f秒 (%s)\n', max(pixelInterpolationTimes), ...
+        fieldNames{pixelInterpolationTimes == max(pixelInterpolationTimes)});
+fprintf('最快像素耗时: %.3f秒 (%s)\n', min(pixelInterpolationTimes), ...
+        fieldNames{pixelInterpolationTimes == min(pixelInterpolationTimes)});
+
+% 保存结果
+% 修改这一行保存命令：
+save('InterpolatedClassifiedData.mat', 'interpolatedStruct', 'pixelInterpolationTimes', 'totalInterpolationTime', '-v7.3');
+
+disp('插值完成，结果已保存到 InterpolatedClassifiedData.mat');
+
+% 播放完成提示音
+load train 
+sound(y, Fs);

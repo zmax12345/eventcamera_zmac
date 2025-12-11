@@ -1,0 +1,120 @@
+clear;
+close all;
+clc;
+
+% 加载插值后的数据
+try
+    load('InterpolatedClassifiedData.mat'); % 加载您上一步保存的插值结果
+    interpolatedStruct = interpolatedStruct; % 获取插值后结构体
+catch
+    error('无法加载插值后的数据文件，请先运行插值程序');
+end
+
+% 获取所有像素坐标字段
+pixelFields = fieldnames(interpolatedStruct);
+
+% 设定参数
+n = 3.08; % 散斑尺寸（单位：像素）
+k = 5.1667; % 像素实际尺寸（单位：μm/pixel）
+delta_t = 50; % 事件相机输出间隔（单位：μs），与插值间隔一致
+
+% 初始化结果存储
+results = struct();
+
+% 遍历每个像素坐标
+for p = 1:numel(pixelFields)
+    currentPixel = pixelFields{p};
+    pixelData = interpolatedStruct.(currentPixel);
+    
+    % 检查数据有效性（至少需要5列，第5列是时间戳）
+    if size(pixelData, 2) < 5
+        fprintf('像素 %s: 数据列数不足，跳过\n', currentPixel);
+        continue;
+    end
+    
+    % 提取第3列数据（假设这是强度数据）
+    x = pixelData(:, 3);
+    
+    % 检查数据是否全为零或NaN
+    if all(x == 0) || all(isnan(x))
+        fprintf('像素 %s: 数据全为零或NaN，跳过\n', currentPixel);
+        continue;
+    end
+    
+    % 计算自相关
+    try
+        [a, b] = xcorr(x, 'unbiased');
+    catch ME
+        fprintf('像素 %s: 自相关计算失败 - %s\n', currentPixel, ME.message);
+        continue;
+    end
+    
+    % 自相关结果检查
+    if length(b) < 2
+        fprintf('像素 %s: 自相关结果太短，跳过\n', currentPixel);
+        continue;
+    end
+    
+    % 寻找半高宽点
+    midpoint_index = round(length(b)/2);
+    right_min_index = midpoint_index + 1;
+    
+    % 寻找右侧第一个极小值
+    while right_min_index < length(b) && a(right_min_index) >= a(right_min_index + 1)
+        right_min_index = right_min_index + 1;
+    end
+    
+    if right_min_index >= length(b)
+        fprintf('像素 %s: 未找到极小值点，跳过\n', currentPixel);
+        continue;
+    end
+    
+    % 计算半高宽和速度
+    right_middle_x_value = b(right_min_index);
+    half_height_width = 2 * right_middle_x_value * delta_t * 1e-6; % 转换为秒
+    velocity = n * k * 1e-3 / half_height_width; % 转换为mm/s
+    
+    % 存储结果
+    results.(currentPixel).half_height_width = half_height_width;
+    results.(currentPixel).velocity = velocity;
+    results.(currentPixel).autocorr = a;
+    results.(currentPixel).lags = b;
+end
+
+% 计算统计结果
+validPixels = fieldnames(results);
+if isempty(validPixels)
+    error('没有有效像素数据可供计算');
+end
+
+% 提取所有有效结果
+all_half_widths = arrayfun(@(x) results.(validPixels{x}).half_height_width, 1:numel(validPixels));
+all_velocities = arrayfun(@(x) results.(validPixels{x}).velocity, 1:numel(validPixels));
+
+% 显示统计信息
+fprintf('\n===== 速度分析结果 =====\n');
+fprintf('有效分析像素数: %d/%d\n', numel(validPixels), numel(pixelFields));
+fprintf('半高宽平均值: %.3e ± %.3e s\n', mean(all_half_widths), std(all_half_widths));
+fprintf('速度平均值: %.3f ± %.3f mm/s\n', mean(all_velocities), std(all_velocities));
+fprintf('最小速度: %.3f mm/s\n', min(all_velocities));
+fprintf('最大速度: %.3f mm/s\n', max(all_velocities));
+
+% 保存完整结果
+save('VelocityAnalysisResults.mat', 'results', 'all_half_widths', 'all_velocities', '-v7.3');
+
+% % 可视化示例结果（选择前9个像素）
+% if numel(validPixels) >= 9
+%     figure('Name', '自相关函数示例', 'Position', [100, 100, 900, 600]);
+%     for i = 1:9
+%         subplot(3,3,i);
+%         plot(results.(validPixels{i}).lags, results.(validPixels{i}).autocorr);
+%         title(sprintf('Pixel %s\nv=%.2f mm/s', validPixels{i}, results.(validPixels{i}).velocity));
+%         xlabel('Lag');
+%         ylabel('Autocorrelation');
+%         grid on;
+%     end
+% end
+
+% 播放完成提示音
+load train;
+sound(y, Fs);
