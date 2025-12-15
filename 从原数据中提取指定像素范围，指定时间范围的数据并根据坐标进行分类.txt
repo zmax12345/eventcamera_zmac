@@ -2,7 +2,7 @@ clear;
 
 % 指定文件路径
 % file_path = 'D:\课题组\事件相机相关\实验\图片\2024.03.21\MipiData_20240321_101306062_EI_70M.csv';
-file_path = 'D:\matlabproject\projects\blood\1.2mm_clip.csv';
+file_path = 'D:\课题组\事件相机相关\实验\图片\2024.03.21\MipiData_20240321_101306062_EI_70M.csv';
 
 % 使用 readmatrix 读取数据
 data = readmatrix(file_path);
@@ -69,3 +69,4 @@ fprintf('时间筛选范围: %.3fs ~ %.3fs (对应%d~%dμs)\n', ...
 % 播放完成提示音
 load train;
 sound(y, Fs);
+
